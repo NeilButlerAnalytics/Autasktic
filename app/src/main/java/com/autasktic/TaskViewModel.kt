@@ -7,6 +7,9 @@ import com.autasktic.data.AppDatabase
 import com.autasktic.data.TaskEntity
 import com.autasktic.notifications.TaskAlarmScheduler
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
@@ -17,6 +20,8 @@ import java.time.LocalTime
 class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = AppDatabase.getInstance(application).taskDao()
     private val colourMutex = Mutex()
+    private val _pendingTaskColour = MutableStateFlow(TaskColours.palette.first())
+    val pendingTaskColour: StateFlow<String> = _pendingTaskColour.asStateFlow()
 
     fun observeActiveTasks(date: LocalDate): Flow<List<TaskEntity>> =
         dao.observeActiveTasks(date.toString())
@@ -24,14 +29,27 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     fun observeCompletedTasks(date: LocalDate): Flow<List<TaskEntity>> =
         dao.observeCompletedTasks(date.toString())
 
-    fun addTask(description: String, date: LocalDate, time: LocalTime?) {
+    fun prepareNewTaskColour() {
+        viewModelScope.launch {
+            colourMutex.withLock {
+                _pendingTaskColour.value = TaskColours.choose(dao.getUsedColours().toSet())
+            }
+        }
+    }
+
+    fun addTask(
+        description: String,
+        date: LocalDate,
+        time: LocalTime?,
+        colour: String? = null,
+    ) {
         viewModelScope.launch {
             colourMutex.withLock {
                 val task = TaskEntity(
                     description = description.trim(),
                     date = date.toString(),
                     time = time?.toString(),
-                    colour = TaskColours.choose(dao.getUsedColours().toSet()),
+                    colour = colour ?: TaskColours.choose(dao.getUsedColours().toSet()),
                     createdAt = LocalDateTime.now().toString(),
                 )
                 val taskId = dao.insert(task)

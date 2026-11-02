@@ -143,6 +143,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val completedTasks by viewModel.observeCompletedTasks(selectedDate)
         .collectAsStateWithLifecycle(initialValue = emptyList())
+    val pendingTaskColour by viewModel.pendingTaskColour.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
     var showCompleted by remember { mutableStateOf(false) }
     var selectedTask by remember { mutableStateOf<TaskEntity?>(null) }
@@ -336,11 +337,15 @@ private fun TodayScreen(viewModel: TaskViewModel) {
     }
 
     if (showAddDialog) {
+        LaunchedEffect(Unit) {
+            viewModel.prepareNewTaskColour()
+        }
         AddTaskDialog(
             initialDate = selectedDate,
+            taskColour = pendingTaskColour,
             onDismiss = { showAddDialog = false },
-            onSave = { description, date, time ->
-                viewModel.addTask(description, date, time)
+            onSave = { description, date, time, colour ->
+                viewModel.addTask(description, date, time, colour)
                 showAddDialog = false
             },
         )
@@ -487,17 +492,20 @@ private fun progressFor(task: TaskEntity, now: LocalDateTime): Float {
 @Composable
 private fun AddTaskDialog(
     initialDate: LocalDate,
+    taskColour: String,
     onDismiss: () -> Unit,
-    onSave: (String, LocalDate, LocalTime?) -> Unit,
+    onSave: (String, LocalDate, LocalTime?, String) -> Unit,
 ) {
     TaskPanelDialog(
         initialDescription = "",
         initialDate = initialDate,
         initialTime = null,
-        taskColour = "#EADCF8",
+        taskColour = taskColour,
         isAdding = true,
         onDismiss = onDismiss,
-        onSave = onSave,
+        onSave = { description, date, time ->
+            onSave(description, date, time, taskColour)
+        },
     )
 }
 
