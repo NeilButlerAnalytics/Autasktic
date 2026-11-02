@@ -304,10 +304,6 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        TextButton(onClick = { showCompleted = !showCompleted }) {
-            Text(if (showCompleted) "Hide completed" else "Show completed")
-        }
-        Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (tasks.isEmpty()) {
                 item { Text("No tasks for this date", style = MaterialTheme.typography.bodyLarge) }
@@ -351,6 +347,17 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                 .align(Alignment.BottomCenter)
                 .padding(16.dp),
         )
+    Button(
+        onClick = { showCompleted = !showCompleted },
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(16.dp)
+            .height(36.dp),
+        shape = RoundedCornerShape(18.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+    ) {
+        Text(if (showCompleted) "Hide completed" else "Show completed")
+    }
     }
 
     if (showDatePicker) {
