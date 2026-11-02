@@ -13,4 +13,5 @@ data class TaskEntity(
     val isCompleted: Boolean = false,
     val createdAt: String,
     val completedAt: String? = null,
+    val wasCarriedOver: Boolean = false,
 )

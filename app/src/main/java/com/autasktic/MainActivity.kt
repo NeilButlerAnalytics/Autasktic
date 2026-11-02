@@ -116,10 +116,10 @@ class MainActivity : ComponentActivity() {
                     ),
                 )
             } else {
-                taskViewModel.rescheduleActiveTimedTasks()
+                taskViewModel.refreshTimedTasks()
             }
         } else {
-            taskViewModel.rescheduleActiveTimedTasks()
+            taskViewModel.refreshTimedTasks()
         }
     }
 
@@ -461,6 +461,12 @@ private fun TaskCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(task.description, style = MaterialTheme.typography.titleMedium)
                 task.time?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                if (task.wasCarriedOver) {
+                    Text(
+                        "Carried over",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
                 if (task.isCompleted) {
                     Text("Completed", style = MaterialTheme.typography.bodySmall)
                 }

@@ -60,6 +60,32 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun carryOverOverdueTasks() {
+        viewModelScope.launch {
+            val today = LocalDate.now()
+            dao.getOverdueActiveTasks(today.toString()).forEach { task ->
+                TaskAlarmScheduler.cancel(getApplication(), task.id)
+                dao.carryOver(task.id, today.toString())
+                dao.getById(task.id)?.let {
+                    TaskAlarmScheduler.schedule(getApplication(), it)
+                }
+            }
+        }
+    }
+
+    fun refreshTimedTasks() {
+        viewModelScope.launch {
+            val today = LocalDate.now()
+            dao.getOverdueActiveTasks(today.toString()).forEach { task ->
+                TaskAlarmScheduler.cancel(getApplication(), task.id)
+                dao.carryOver(task.id, today.toString())
+            }
+            dao.getActiveTimedTasks().forEach {
+                TaskAlarmScheduler.schedule(getApplication(), it)
+            }
+        }
+    }
+
     fun updateTask(task: TaskEntity, description: String, date: LocalDate, time: LocalTime?) {
         viewModelScope.launch {
             TaskAlarmScheduler.cancel(getApplication(), task.id)
@@ -67,6 +93,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 description = description.trim(),
                 date = date.toString(),
                 time = time?.toString(),
+                wasCarriedOver = false,
             )
             dao.update(updatedTask)
             TaskAlarmScheduler.schedule(getApplication(), updatedTask)

@@ -20,6 +20,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE isCompleted = 0 AND time IS NOT NULL")
     suspend fun getActiveTimedTasks(): List<TaskEntity>
 
+    @Query("SELECT * FROM tasks WHERE isCompleted = 0 AND date < :today")
+    suspend fun getOverdueActiveTasks(today: String): List<TaskEntity>
+
     @Insert
     suspend fun insert(task: TaskEntity): Long
 
@@ -34,6 +37,13 @@ interface TaskDao {
     @Query("UPDATE tasks SET isCompleted = 0, completedAt = NULL WHERE id = :taskId")
     suspend fun reopen(taskId: Long)
 
-    @Query("UPDATE tasks SET date = :date WHERE id = :taskId AND isCompleted = 0")
+    @Query(
+        "UPDATE tasks SET date = :date, wasCarriedOver = 0 WHERE id = :taskId AND isCompleted = 0",
+    )
     suspend fun moveForward(taskId: Long, date: String)
+
+    @Query(
+        "UPDATE tasks SET date = :date, wasCarriedOver = 1 WHERE id = :taskId AND isCompleted = 0",
+    )
+    suspend fun carryOver(taskId: Long, date: String)
 }
