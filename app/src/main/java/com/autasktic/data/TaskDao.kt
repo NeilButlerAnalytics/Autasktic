@@ -23,6 +23,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE isCompleted = 0 AND date < :today")
     suspend fun getOverdueActiveTasks(today: String): List<TaskEntity>
 
+    @Query("SELECT colour FROM tasks")
+    suspend fun getUsedColours(): List<String>
+
     @Insert
     suspend fun insert(task: TaskEntity): Long
 

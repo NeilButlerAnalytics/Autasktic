@@ -7,6 +7,8 @@ import com.autasktic.data.AppDatabase
 import com.autasktic.data.TaskEntity
 import com.autasktic.notifications.TaskAlarmScheduler
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -14,6 +16,7 @@ import java.time.LocalTime
 
 class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = AppDatabase.getInstance(application).taskDao()
+    private val colourMutex = Mutex()
 
     fun observeActiveTasks(date: LocalDate): Flow<List<TaskEntity>> =
         dao.observeActiveTasks(date.toString())
@@ -23,18 +26,20 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addTask(description: String, date: LocalDate, time: LocalTime?) {
         viewModelScope.launch {
-            val task = TaskEntity(
-                description = description.trim(),
-                date = date.toString(),
-                time = time?.toString(),
-                colour = pastelColours.random(),
-                createdAt = LocalDateTime.now().toString(),
-            )
-            val taskId = dao.insert(task)
-            TaskAlarmScheduler.schedule(
-                getApplication(),
-                task.copy(id = taskId),
-            )
+            colourMutex.withLock {
+                val task = TaskEntity(
+                    description = description.trim(),
+                    date = date.toString(),
+                    time = time?.toString(),
+                    colour = TaskColours.choose(dao.getUsedColours().toSet()),
+                    createdAt = LocalDateTime.now().toString(),
+                )
+                val taskId = dao.insert(task)
+                TaskAlarmScheduler.schedule(
+                    getApplication(),
+                    task.copy(id = taskId),
+                )
+            }
         }
     }
 
@@ -106,7 +111,4 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private companion object {
-        val pastelColours = listOf("#D9EAD3", "#D0E0E3", "#FCE5CD", "#EADCF8", "#FFF2CC")
-    }
 }
