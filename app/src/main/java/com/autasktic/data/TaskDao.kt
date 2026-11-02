@@ -49,4 +49,7 @@ interface TaskDao {
         "UPDATE tasks SET date = :date, wasCarriedOver = 1 WHERE id = :taskId AND isCompleted = 0",
     )
     suspend fun carryOver(taskId: Long, date: String)
+
+    @Query("DELETE FROM tasks WHERE id = :taskId")
+    suspend fun delete(taskId: Long)
 }

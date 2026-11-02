@@ -311,6 +311,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                         task = task,
                         onComplete = null,
                         onReopen = { viewModel.reopenTask(task.id) },
+                        onDelete = { viewModel.deleteTask(task.id) },
                         onOpen = {},
                         now = now,
                     )
@@ -377,6 +378,7 @@ private fun TaskCard(
     task: TaskEntity,
     onComplete: ((Long) -> Unit)?,
     onReopen: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     onOpen: () -> Unit,
     now: LocalDateTime,
 ) {
@@ -391,9 +393,9 @@ private fun TaskCard(
         label = "task swipe",
     )
     LaunchedEffect(swipeTarget) {
-        if (swipeTarget != null && onComplete != null) {
+        if (swipeTarget != null && (onComplete != null || onDelete != null)) {
             delay(220)
-            onComplete(task.id)
+            onComplete?.invoke(task.id) ?: onDelete?.invoke()
         }
     }
 
@@ -403,8 +405,8 @@ private fun TaskCard(
             .animateContentSize()
             .offset { IntOffset(animatedOffset.roundToInt(), 0) }
             .clickable(onClick = { onReopen?.invoke() ?: onOpen() })
-            .pointerInput(task.id, onComplete) {
-                if (onComplete != null) {
+            .pointerInput(task.id, onComplete, onDelete) {
+                if (onComplete != null || onDelete != null) {
                     detectHorizontalDragGestures(
                         onHorizontalDrag = { change, amount ->
                             change.consume()

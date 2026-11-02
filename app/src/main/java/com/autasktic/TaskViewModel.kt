@@ -68,6 +68,13 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteTask(taskId: Long) {
+        viewModelScope.launch {
+            dao.delete(taskId)
+            TaskAlarmScheduler.cancel(getApplication(), taskId)
+        }
+    }
+
     fun reopenTask(taskId: Long) {
         viewModelScope.launch {
             dao.reopen(taskId)
