@@ -45,9 +45,10 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch {
             colourMutex.withLock {
+                val taskDate = date.coerceAtLeast(LocalDate.now())
                 val task = TaskEntity(
                     description = description.trim(),
-                    date = date.toString(),
+                    date = taskDate.toString(),
                     time = time?.toString(),
                     colour = colour ?: TaskColours.choose(dao.getUsedColours().toSet()),
                     createdAt = LocalDateTime.now().toString(),
@@ -125,9 +126,10 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     fun updateTask(task: TaskEntity, description: String, date: LocalDate, time: LocalTime?) {
         viewModelScope.launch {
             TaskAlarmScheduler.cancel(getApplication(), task.id)
+            val taskDate = date.coerceAtLeast(LocalDate.now())
             val updatedTask = task.copy(
                 description = description.trim(),
-                date = date.toString(),
+                date = taskDate.toString(),
                 time = time?.toString(),
                 wasCarriedOver = false,
             )

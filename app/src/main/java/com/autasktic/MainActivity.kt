@@ -271,7 +271,8 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Button(
-                onClick = { showAddDialog = true },
+                onClick = { if (selectedDate >= today) showAddDialog = true },
+                enabled = selectedDate >= today,
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp),
@@ -291,6 +292,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
+                enabled = selectedDate >= today,
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp),
@@ -375,7 +377,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             taskColour = pendingTaskColour,
             onDismiss = { showAddDialog = false },
             onSave = { description, date, time, colour ->
-                viewModel.addTask(description, date, time, colour)
+                viewModel.addTask(description, date.coerceAtLeast(today), time, colour)
                 showAddDialog = false
             },
         )
@@ -385,7 +387,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             task = task,
             onDismiss = { selectedTask = null },
             onSave = { description, date, time ->
-                viewModel.updateTask(task, description, date, time)
+                viewModel.updateTask(task, description, date.coerceAtLeast(today), time)
                 selectedTask = null
             },
         )
@@ -395,7 +397,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             initialDate = selectedDate,
             onDismiss = { showVoiceDialog = false },
             onSave = { description, date, time ->
-                viewModel.addTask(description, date, time)
+                viewModel.addTask(description, date.coerceAtLeast(today), time)
                 showVoiceDialog = false
             },
         )
@@ -806,6 +808,7 @@ private fun TaskFieldsDialog(
     var date by remember { mutableStateOf(initialDate) }
     var time by remember { mutableStateOf(initialTime) }
     val context = LocalContext.current
+    val today = LocalDate.now()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -821,7 +824,9 @@ private fun TaskFieldsDialog(
                     onClick = {
                         DatePickerDialog(
                             context,
-                            { _, year, month, day -> date = LocalDate.of(year, month + 1, day) },
+                            { _, year, month, day ->
+                                date = LocalDate.of(year, month + 1, day).coerceAtLeast(today)
+                            },
                             date.year,
                             date.monthValue - 1,
                             date.dayOfMonth,
