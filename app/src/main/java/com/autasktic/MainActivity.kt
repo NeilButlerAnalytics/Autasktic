@@ -8,6 +8,7 @@ import android.os.Build
 import android.provider.Settings
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -98,6 +99,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.time.ZoneId
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.core.content.ContextCompat
@@ -666,9 +668,16 @@ private fun TaskPanelDialog(
                 ) {
                     IconButton(
                         onClick = {
-                            if (date > today) moveDateAndShowFeedback(date.minusDays(1))
+                            if (date > today) {
+                                moveDateAndShowFeedback(date.minusDays(1))
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "Tasks cannot be scheduled before today",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
                         },
-                        enabled = date > today,
                         modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
@@ -767,6 +776,9 @@ private fun TaskPanelDialog(
                 date.monthValue - 1,
                 date.dayOfMonth,
             ).apply {
+                datePicker.minDate = today.atStartOfDay(ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli()
                 setOnDismissListener { showDateEditor = false }
             }.show()
         }
@@ -830,7 +842,11 @@ private fun TaskFieldsDialog(
                             date.year,
                             date.monthValue - 1,
                             date.dayOfMonth,
-                        ).show()
+                        ).apply {
+                            datePicker.minDate = today.atStartOfDay(ZoneId.systemDefault())
+                                .toInstant()
+                                .toEpochMilli()
+                        }.show()
                     },
                 ) {
                     Text("Date: ${date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.UK))}")
