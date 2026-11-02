@@ -82,6 +82,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.autasktic.data.TaskEntity
@@ -563,20 +564,21 @@ private fun TaskPanelDialog(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = if (isAdding) onDismiss else closeAndSave,
-        modifier = Modifier.fillMaxWidth(0.94f),
-        title = null,
-        shape = RoundedCornerShape(32.dp),
-        containerColor = colour,
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 380.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.CenterHorizontally,
+    Dialog(onDismissRequest = if (isAdding) onDismiss else closeAndSave) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(0.94f),
+                shape = RoundedCornerShape(32.dp),
+                color = colour,
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 380.dp)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -667,45 +669,42 @@ private fun TaskPanelDialog(
                         )
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.7f)
-                        .height(42.dp)
-                        .graphicsLayer { alpha = dateFeedbackAlpha }
-                        .background(darken(colour), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.UK)),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                }
+                if (isAdding) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        IconButton(
+                            onClick = {
+                                if (description.isNotBlank()) onSave(description, date, time)
+                            },
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = "Save task")
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel task")
+                        }
+                    }
                 }
             }
-        },
-        confirmButton = if (isAdding) {
-            {
-                IconButton(
-                    onClick = {
-                        if (description.isNotBlank()) onSave(description, date, time)
-                    },
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = "Save task")
-                }
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .height(42.dp)
+                    .graphicsLayer { alpha = dateFeedbackAlpha }
+                    .background(darken(colour), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.UK)),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
             }
-        } else {
-            {}
-        },
-        dismissButton = if (isAdding) {
-            {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Cancel task")
-                }
-            }
-        } else {
-            {}
-        },
-    )
+        }
+    }
 
     if (showDateEditor) {
         LaunchedEffect(Unit) {
