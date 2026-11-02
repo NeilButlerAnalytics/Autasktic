@@ -562,7 +562,15 @@ private fun TaskCard(
                     )
                 }
                 if (task.isCompleted) {
-                    Text("Completed", style = MaterialTheme.typography.bodySmall)
+                    val completedAt = task.completedAt?.let(LocalDateTime::parse)
+                    Text(
+                        completedAt?.let {
+                            "Completed at ${
+                                it.format(DateTimeFormatter.ofPattern("HH:mm", Locale.UK))
+                            }"
+                        } ?: "Completed",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
         }
