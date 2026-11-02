@@ -304,7 +304,32 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .pointerInput(selectedDate) {
+                    var dragDistance = 0f
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, amount ->
+                            change.consume()
+                            dragDistance += amount
+                            swipeOffset = (swipeOffset + amount).coerceIn(-48f, 48f)
+                        },
+                        onDragEnd = {
+                            if (abs(dragDistance) > 80f) {
+                                selectedDate = if (dragDistance > 0) {
+                                    selectedDate.minusDays(1)
+                                } else {
+                                    selectedDate.plusDays(1)
+                                }
+                            }
+                            swipeOffset = 0f
+                        },
+                    )
+                },
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             if (tasks.isEmpty()) {
                 item { Text("No tasks for this date", style = MaterialTheme.typography.bodyLarge) }
             } else {
