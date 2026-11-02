@@ -416,15 +416,16 @@ private fun TaskCard(
     val shape = RoundedCornerShape(16.dp)
     var dragOffset by remember { mutableStateOf(0f) }
     var swipeTarget by remember { mutableStateOf<Float?>(null) }
+    val swipeDuration = if (onDelete != null) 500 else 220
     val animatedOffset by animateFloatAsState(
         targetValue = swipeTarget ?: dragOffset,
-        animationSpec = tween(durationMillis = 220),
+        animationSpec = tween(durationMillis = swipeDuration),
         label = "task swipe",
     )
     val swipeProgress = (abs(animatedOffset) / 1200f).coerceIn(0f, 1f)
     LaunchedEffect(swipeTarget) {
         if (swipeTarget != null && (onComplete != null || onDelete != null)) {
-            delay(220)
+            delay(swipeDuration.toLong())
             onComplete?.invoke(task.id) ?: onDelete?.invoke()
         }
     }
