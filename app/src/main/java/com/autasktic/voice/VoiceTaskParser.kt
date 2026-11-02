@@ -14,15 +14,15 @@ data class ParsedVoiceTask(
 
 object VoiceTaskParser {
     private val datePattern = Pattern.compile(
-        "\\b(?:on\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\\b",
+        "\\b(?:(?:on|in)(?:\\s+the)?\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\\b",
         Pattern.CASE_INSENSITIVE,
     )
     private val numericTimePattern = Pattern.compile(
-        "\\b(?:at\\s+)?(\\d{1,2}):(\\d{2})\\b",
+        "\\b(?:at\\s+)?(\\d{1,2}):(\\d{2})\\s*(a\\.?m\\.?|p\\.?m\\.?)?\\b",
         Pattern.CASE_INSENSITIVE,
     )
-    private val oClockPattern = Pattern.compile(
-        "\\bat\\s+(\\d{1,2})\\s+o'?clock\\b",
+    private val spokenHourPattern = Pattern.compile(
+        "\\bat\\s+(\\d{1,2})(?::(\\d{2}))?(?:\\s*(a\\.?m\\.?|p\\.?m\\.?)|\\s+o'?clock)?\\b",
         Pattern.CASE_INSENSITIVE,
     )
     private val spokenTimePattern = Pattern.compile(
@@ -50,17 +50,25 @@ object VoiceTaskParser {
         if (numericTimeMatcher.find()) {
             val hour = numericTimeMatcher.group(1)?.toIntOrNull()
             val minute = numericTimeMatcher.group(2)?.toIntOrNull()
+            val meridiem = numericTimeMatcher.group(3)
             if (hour != null && minute != null) {
-                runCatching { LocalTime.of(hour, minute) }.onSuccess { time = it }
+                runCatching { LocalTime.of(to24Hour(hour, meridiem), minute) }.onSuccess { time = it }
                 description = description.replaceRange(numericTimeMatcher.start(), numericTimeMatcher.end(), " ")
             }
         } else {
-            val oClockMatcher = oClockPattern.matcher(description)
-            if (oClockMatcher.find()) {
-                val hour = oClockMatcher.group(1)?.toIntOrNull()
+            val spokenHourMatcher = spokenHourPattern.matcher(description)
+            if (spokenHourMatcher.find()) {
+                val hour = spokenHourMatcher.group(1)?.toIntOrNull()
+                val minute = spokenHourMatcher.group(2)?.toIntOrNull() ?: 0
+                val meridiem = spokenHourMatcher.group(3)
                 if (hour != null) {
-                    time = LocalTime.of(normaliseHour(hour), 0)
-                    description = description.replaceRange(oClockMatcher.start(), oClockMatcher.end(), " ")
+                    runCatching { LocalTime.of(to24Hour(hour, meridiem), minute) }
+                        .onSuccess { time = it }
+                    description = description.replaceRange(
+                        spokenHourMatcher.start(),
+                        spokenHourMatcher.end(),
+                        " ",
+                    )
                 }
             } else {
                 val spokenMatcher = spokenTimePattern.matcher(description)
@@ -89,6 +97,12 @@ object VoiceTaskParser {
 
     private fun monthFromName(name: String): Int =
         Month.valueOf(name.uppercase(Locale.UK)).value
+
+    private fun to24Hour(hour: Int, meridiem: String?): Int {
+        if (meridiem == null) return hour
+        val normalised = hour % 12
+        return if (meridiem.lowercase(Locale.UK).startsWith("p")) normalised + 12 else normalised
+    }
 
     private fun normaliseHour(hour: Int): Int = if (hour in 1..12) hour else hour % 24
 }

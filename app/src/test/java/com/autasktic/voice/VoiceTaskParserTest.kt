@@ -28,6 +28,24 @@ class VoiceTaskParserTest {
     }
 
     @Test
+    fun parsesPmTimeAndRemovesTimeAndDateConnectors() {
+        val result = VoiceTaskParser.parse("make tea at 4pm on the 3rd November", today)
+
+        assertEquals("make tea", result.description)
+        assertEquals(LocalDate.of(2026, 11, 3), result.date)
+        assertEquals(LocalTime.of(16, 0), result.time)
+    }
+
+    @Test
+    fun parsesAmAndPmWithSpokenClockFormat() {
+        val amResult = VoiceTaskParser.parse("Walk at 9 am", today)
+        val pmResult = VoiceTaskParser.parse("Dinner at 4 p.m.", today)
+
+        assertEquals(LocalTime.of(9, 0), amResult.time)
+        assertEquals(LocalTime.of(16, 0), pmResult.time)
+    }
+
+    @Test
     fun defaultsToSelectedDateWithoutGuessingTime() {
         val result = VoiceTaskParser.parse("Buy food", today)
 
