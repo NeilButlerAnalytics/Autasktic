@@ -43,6 +43,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -74,6 +77,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -156,6 +160,8 @@ private fun TodayScreen(viewModel: TaskViewModel) {
         label = "date swipe feedback",
     )
     var showVoiceDialog by remember { mutableStateOf(false) }
+    var recentlyDeletedTask by remember { mutableStateOf<TaskEntity?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -177,6 +183,18 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
+    LaunchedEffect(recentlyDeletedTask?.id) {
+            val deletedTask = recentlyDeletedTask ?: return@LaunchedEffect
+            val result = snackbarHostState.showSnackbar(
+                message = "Task deleted",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Long,
+            )
+            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                viewModel.restoreTask(deletedTask)
+            }
+            recentlyDeletedTask = null
+    }
     LaunchedEffect(Unit) {
         while (true) {
             delay(60_000)
@@ -184,13 +202,14 @@ private fun TodayScreen(viewModel: TaskViewModel) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(24.dp)
-            .blur(if (showAddDialog || selectedTask != null || showVoiceDialog) 10.dp else 0.dp),
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(24.dp)
+                .blur(if (showAddDialog || selectedTask != null || showVoiceDialog) 10.dp else 0.dp),
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -311,13 +330,23 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                         task = task,
                         onComplete = null,
                         onReopen = { viewModel.reopenTask(task.id) },
-                        onDelete = { viewModel.deleteTask(task.id) },
+                        onDelete = {
+                            viewModel.deleteTask(task.id)
+                            recentlyDeletedTask = task
+                        },
                         onOpen = {},
                         now = now,
                     )
                 }
             }
         }
+    }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+        )
     }
 
     if (showDatePicker) {
@@ -392,6 +421,7 @@ private fun TaskCard(
         animationSpec = tween(durationMillis = 220),
         label = "task swipe",
     )
+    val swipeProgress = (abs(animatedOffset) / 1200f).coerceIn(0f, 1f)
     LaunchedEffect(swipeTarget) {
         if (swipeTarget != null && (onComplete != null || onDelete != null)) {
             delay(220)
@@ -438,7 +468,7 @@ private fun TaskCard(
             containerColor = if (timedProgress != null && !task.isCompleted) {
                 MaterialTheme.colorScheme.surface
             } else if (task.isCompleted) {
-                Color.LightGray
+                lerp(Color.LightGray, Color(0xFFE57373), swipeProgress)
             } else {
                 colour
             },

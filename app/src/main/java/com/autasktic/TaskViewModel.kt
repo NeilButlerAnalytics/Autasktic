@@ -75,6 +75,12 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun restoreTask(task: TaskEntity) {
+        viewModelScope.launch {
+            dao.insert(task)
+        }
+    }
+
     fun reopenTask(taskId: Long) {
         viewModelScope.launch {
             dao.reopen(taskId)
