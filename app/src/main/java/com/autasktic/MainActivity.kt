@@ -164,6 +164,14 @@ private fun TodayScreen(viewModel: TaskViewModel) {
     var showVoiceDialog by remember { mutableStateOf(false) }
     var recentlyDeletedTask by remember { mutableStateOf<TaskEntity?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    var isDateTransitioning by remember { mutableStateOf(false) }
+    var dateTransitionJob by remember { mutableStateOf<Job?>(null) }
+    val dateTransitionScope = rememberCoroutineScope()
+    val pageAlpha by animateFloatAsState(
+        targetValue = if (isDateTransitioning) 0f else 1f,
+        animationSpec = tween(durationMillis = 180),
+        label = "date page fade",
+    )
     val context = LocalContext.current
     val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -183,6 +191,17 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    fun moveToDate(newDate: LocalDate) {
+        if (newDate == selectedDate) return
+        dateTransitionJob?.cancel()
+        isDateTransitioning = true
+        dateTransitionJob = dateTransitionScope.launch {
+            delay(180)
+            selectedDate = newDate
+            delay(24)
+            isDateTransitioning = false
         }
     }
     LaunchedEffect(recentlyDeletedTask?.id) {
@@ -210,6 +229,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                 .fillMaxSize()
                 .statusBarsPadding()
                 .padding(24.dp)
+                .graphicsLayer { alpha = pageAlpha }
                 .blur(if (showAddDialog || selectedTask != null || showVoiceDialog) 10.dp else 0.dp),
         ) {
         Row(
@@ -226,11 +246,11 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                         },
                         onDragEnd = {
                             if (abs(dragDistance) > 80f) {
-                                selectedDate = if (dragDistance > 0) {
+                                moveToDate(if (dragDistance > 0) {
                                     selectedDate.minusDays(1)
                                 } else {
                                     selectedDate.plusDays(1)
-                                }
+                                })
                             }
                             swipeOffset = 0f
                         },
@@ -261,7 +281,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
         }
         if (selectedDate != today) {
             TextButton(
-                onClick = { selectedDate = today },
+                onClick = { moveToDate(today) },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             ) {
                 Text("Return to today")
@@ -318,11 +338,11 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                         },
                         onDragEnd = {
                             if (abs(dragDistance) > 80f) {
-                                selectedDate = if (dragDistance > 0) {
+                                moveToDate(if (dragDistance > 0) {
                                     selectedDate.minusDays(1)
                                 } else {
                                     selectedDate.plusDays(1)
-                                }
+                                })
                             }
                             swipeOffset = 0f
                         },
