@@ -60,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -96,6 +97,8 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val taskViewModel by viewModels<TaskViewModel>()
@@ -523,6 +526,14 @@ private fun TaskPanelDialog(
     var time by remember { mutableStateOf(initialTime) }
     var showDateEditor by remember { mutableStateOf(false) }
     var showTimeEditor by remember { mutableStateOf(false) }
+    var showDateFeedback by remember { mutableStateOf(false) }
+    var dateFeedbackHideJob by remember { mutableStateOf<Job?>(null) }
+    val dateFeedbackAlpha by animateFloatAsState(
+        targetValue = if (showDateFeedback) 1f else 0f,
+        animationSpec = tween(durationMillis = 300),
+        label = "date feedback alpha",
+    )
+    val dateFeedbackScope = rememberCoroutineScope()
     val context = LocalContext.current
     val colour = Color(android.graphics.Color.parseColor(taskColour))
     val today = LocalDate.now()
@@ -540,6 +551,15 @@ private fun TaskPanelDialog(
             onSave(description, date, time)
         } else {
             onDismiss()
+        }
+    }
+    fun moveDateAndShowFeedback(newDate: LocalDate) {
+        date = newDate
+        showDateFeedback = true
+        dateFeedbackHideJob?.cancel()
+        dateFeedbackHideJob = dateFeedbackScope.launch {
+            delay(1_000)
+            showDateFeedback = false
         }
     }
 
@@ -594,7 +614,9 @@ private fun TaskPanelDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(
-                        onClick = { if (date > today) date = date.minusDays(1) },
+                        onClick = {
+                            if (date > today) moveDateAndShowFeedback(date.minusDays(1))
+                        },
                         enabled = date > today,
                         modifier = Modifier.size(40.dp),
                     ) {
@@ -635,7 +657,7 @@ private fun TaskPanelDialog(
                         )
                     }
                     IconButton(
-                        onClick = { date = date.plusDays(1) },
+                        onClick = { moveDateAndShowFeedback(date.plusDays(1)) },
                         modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
@@ -644,6 +666,20 @@ private fun TaskPanelDialog(
                             modifier = Modifier.size(24.dp),
                         )
                     }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(42.dp)
+                        .graphicsLayer { alpha = dateFeedbackAlpha }
+                        .background(darken(colour), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.UK)),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
                 }
             }
         },
