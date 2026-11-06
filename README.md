@@ -64,6 +64,9 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 - Two-hour timed-task pastel fills
 - Local notifications for timed incomplete tasks, including when the app is closed
 - Exact timed notifications when Android's Alarms & reminders access is enabled
+- Long-press task actions for editing, quick rescheduling, routines, breakdowns,
+  reminders, focus, and task status
+- Optional task steps, recurring routines, pre-deadline reminders, and a manual focus task
 - USB deployment to the CMF Phone 1
 
 ## Exact-time notifications

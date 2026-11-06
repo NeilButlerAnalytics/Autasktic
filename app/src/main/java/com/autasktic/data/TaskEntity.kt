@@ -14,4 +14,9 @@ data class TaskEntity(
     val createdAt: String,
     val completedAt: String? = null,
     val wasCarriedOver: Boolean = false,
+    val status: String = "NOT_STARTED",
+    val isFocus: Boolean = false,
+    val reminderMinutes: Int? = null,
+    val recurrence: String? = null,
+    val steps: String = "",
 )

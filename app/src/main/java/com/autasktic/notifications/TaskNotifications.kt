@@ -21,6 +21,9 @@ import kotlinx.coroutines.launch
 
 private const val CHANNEL_ID = "task_due"
 private const val TASK_ID_EXTRA = "task_id"
+private const val KIND_EXTRA = "kind"
+private const val DUE_KIND = 0
+private const val REMINDER_KIND = 1
 
 object TaskAlarmScheduler {
     fun schedule(context: Context, task: TaskEntity) {
@@ -32,7 +35,18 @@ object TaskAlarmScheduler {
         if (triggerAt <= System.currentTimeMillis()) return
 
         val alarmManager = context.getSystemService(AlarmManager::class.java)
-        val intent = pendingIntent(context, task.id)
+        scheduleAlarm(context, task, triggerAt, DUE_KIND)
+        task.reminderMinutes?.let { minutes ->
+            val reminderAt = triggerAt - minutes * 60_000L
+            if (reminderAt > System.currentTimeMillis()) {
+                scheduleAlarm(context, task, reminderAt, REMINDER_KIND)
+            }
+        }
+    }
+
+    private fun scheduleAlarm(context: Context, task: TaskEntity, triggerAt: Long, kind: Int) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        val intent = pendingIntent(context, task.id, kind)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             alarmManager.canScheduleExactAlarms()
         ) {
@@ -43,15 +57,18 @@ object TaskAlarmScheduler {
     }
 
     fun cancel(context: Context, taskId: Long) {
-        context.getSystemService(AlarmManager::class.java)
-            .cancel(pendingIntent(context, taskId))
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        alarmManager.cancel(pendingIntent(context, taskId, DUE_KIND))
+        alarmManager.cancel(pendingIntent(context, taskId, REMINDER_KIND))
     }
 
-    private fun pendingIntent(context: Context, taskId: Long): PendingIntent =
+    private fun pendingIntent(context: Context, taskId: Long, kind: Int): PendingIntent =
         PendingIntent.getBroadcast(
             context,
-            taskId.hashCode(),
-            Intent(context, TaskAlarmReceiver::class.java).putExtra(TASK_ID_EXTRA, taskId),
+            (taskId * 2 + kind).hashCode(),
+            Intent(context, TaskAlarmReceiver::class.java)
+                .putExtra(TASK_ID_EXTRA, taskId)
+                .putExtra(KIND_EXTRA, kind),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 }
@@ -60,12 +77,13 @@ class TaskAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val taskId = intent.getLongExtra(TASK_ID_EXTRA, -1L)
         if (taskId < 0) return
+        val kind = intent.getIntExtra(KIND_EXTRA, DUE_KIND)
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val task = AppDatabase.getInstance(context).taskDao().getById(taskId)
                 if (task != null && !task.isCompleted) {
-                    TaskNotificationHelper.show(context, task)
+                    TaskNotificationHelper.show(context, task, kind == REMINDER_KIND)
                 }
             } finally {
                 pendingResult.finish()
@@ -103,7 +121,7 @@ object TaskNotificationHelper {
         )
     }
 
-    fun show(context: Context, task: TaskEntity) {
+    fun show(context: Context, task: TaskEntity, isReminder: Boolean = false) {
         createChannel(context)
         val openIntent = PendingIntent.getActivity(
             context,
@@ -113,7 +131,7 @@ object TaskNotificationHelper {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Task due")
+            .setContentTitle(if (isReminder) "Upcoming task" else "Task due")
             .setContentText(task.description)
             .setContentIntent(openIntent)
             .setAutoCancel(true)

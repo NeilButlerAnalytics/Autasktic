@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TaskDao {
-    @Query("SELECT * FROM tasks WHERE date = :date AND isCompleted = 0 ORDER BY time IS NULL, time, createdAt")
+    @Query("SELECT * FROM tasks WHERE date = :date AND isCompleted = 0 ORDER BY isFocus DESC, time IS NULL, time, createdAt")
     fun observeActiveTasks(date: String): Flow<List<TaskEntity>>
 
     @Query("SELECT * FROM tasks WHERE date = :date AND isCompleted = 1 ORDER BY completedAt DESC")
@@ -19,6 +19,9 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE isCompleted = 0 AND time IS NOT NULL")
     suspend fun getActiveTimedTasks(): List<TaskEntity>
+
+    @Query("SELECT * FROM tasks WHERE isCompleted = 0 AND recurrence IS NOT NULL")
+    suspend fun getRecurringTasks(): List<TaskEntity>
 
     @Query("SELECT * FROM tasks WHERE isCompleted = 0 AND date < :today")
     suspend fun getOverdueActiveTasks(today: String): List<TaskEntity>
@@ -33,11 +36,34 @@ interface TaskDao {
     suspend fun update(task: TaskEntity)
 
     @Query(
-        "UPDATE tasks SET isCompleted = 1, completedAt = :completedAt WHERE id = :taskId",
+        "UPDATE tasks SET isCompleted = 1, status = 'COMPLETED', isFocus = 0, completedAt = :completedAt WHERE id = :taskId",
     )
     suspend fun complete(taskId: Long, completedAt: String)
 
-    @Query("UPDATE tasks SET isCompleted = 0, completedAt = NULL WHERE id = :taskId")
+    @Query(
+        "UPDATE tasks SET status = :status WHERE id = :taskId AND isCompleted = 0",
+    )
+    suspend fun setStatus(taskId: Long, status: String)
+
+    @Query("UPDATE tasks SET isFocus = 0 WHERE isCompleted = 0")
+    suspend fun clearFocus()
+
+    @Query("UPDATE tasks SET isFocus = :isFocus WHERE id = :taskId AND isCompleted = 0")
+    suspend fun setFocus(taskId: Long, isFocus: Boolean)
+
+    @Query("UPDATE tasks SET reminderMinutes = :minutes WHERE id = :taskId")
+    suspend fun setReminder(taskId: Long, minutes: Int?)
+
+    @Query("UPDATE tasks SET recurrence = :recurrence WHERE id = :taskId")
+    suspend fun setRecurrence(taskId: Long, recurrence: String?)
+
+    @Query("UPDATE tasks SET steps = :steps WHERE id = :taskId")
+    suspend fun setSteps(taskId: Long, steps: String)
+
+    @Query(
+        "UPDATE tasks SET isCompleted = 0, status = 'NOT_STARTED', isFocus = 0, " +
+            "completedAt = NULL WHERE id = :taskId",
+    )
     suspend fun reopen(taskId: Long)
 
     @Query(

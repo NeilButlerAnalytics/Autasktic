@@ -14,6 +14,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.border
@@ -37,6 +39,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,21 +47,35 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.text.BasicTextField
@@ -87,6 +104,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -132,7 +150,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AutaskticTheme {
+            val accentColour by taskViewModel.accentColour.collectAsStateWithLifecycle()
+            AutaskticTheme(accentColour) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     TodayScreen(taskViewModel)
                 }
@@ -150,9 +169,29 @@ private fun TodayScreen(viewModel: TaskViewModel) {
     val completedTasks by viewModel.observeCompletedTasks(selectedDate)
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val pendingTaskColour by viewModel.pendingTaskColour.collectAsStateWithLifecycle()
+    val accentColour by viewModel.accentColour.collectAsStateWithLifecycle()
+    val customAccentColours by viewModel.customAccentColours.collectAsStateWithLifecycle()
+    val taskFontSize by viewModel.taskFontSize.collectAsStateWithLifecycle()
+    val carriedOverTasks = tasks.filter { it.wasCarriedOver && it.time == null }
+    val doneForNowTasks = tasks.filter {
+        it.status == "DONE_FOR_NOW" && it.time == null
+    }
+    val regularTasks = tasks.filter { task ->
+        task.time != null || (!task.wasCarriedOver && task.status != "DONE_FOR_NOW")
+    }
     var showAddDialog by remember { mutableStateOf(false) }
     var showCompleted by remember { mutableStateOf(false) }
+    val carriedOverExpandedByDate = remember { mutableStateMapOf<LocalDate, Boolean>() }
+    val doneForNowExpandedByDate = remember { mutableStateMapOf<LocalDate, Boolean>() }
+    val carriedOverExpanded = carriedOverExpandedByDate[selectedDate] ?: false
+    val doneForNowExpanded = doneForNowExpandedByDate[selectedDate] ?: false
     var selectedTask by remember { mutableStateOf<TaskEntity?>(null) }
+    var actionTask by remember { mutableStateOf<TaskEntity?>(null) }
+    var pendingActionTask by remember { mutableStateOf<TaskEntity?>(null) }
+    var showRescheduleDialog by remember { mutableStateOf(false) }
+    var showBreakdownDialog by remember { mutableStateOf(false) }
+    var showRoutineDialog by remember { mutableStateOf(false) }
+    var showReminderDialog by remember { mutableStateOf(false) }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var swipeOffset by remember { mutableStateOf(0f) }
@@ -162,6 +201,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
         label = "date swipe feedback",
     )
     var showVoiceDialog by remember { mutableStateOf(false) }
+    var showAccentDialog by remember { mutableStateOf(false) }
     var recentlyDeletedTask by remember { mutableStateOf<TaskEntity?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     var isDateTransitioning by remember { mutableStateOf(false) }
@@ -230,7 +270,11 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                 .statusBarsPadding()
                 .padding(24.dp)
                 .graphicsLayer { alpha = pageAlpha }
-                .blur(if (showAddDialog || selectedTask != null || showVoiceDialog) 10.dp else 0.dp),
+                .blur(
+                    if (showAddDialog || selectedTask != null || showVoiceDialog ||
+                        actionTask != null || pendingActionTask != null
+                    ) 10.dp else 0.dp,
+                ),
         ) {
         Row(
             modifier = Modifier
@@ -323,6 +367,41 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                 Text("Add by Voice")
             }
         }
+        if (carriedOverTasks.isNotEmpty() || doneForNowTasks.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (carriedOverTasks.isNotEmpty()) {
+                        TaskGroupHeader(
+                            title = "Carried over",
+                            count = carriedOverTasks.size,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                carriedOverExpandedByDate[selectedDate] = !carriedOverExpanded
+                            },
+                        )
+                    }
+                    if (doneForNowTasks.isNotEmpty()) {
+                        TaskGroupHeader(
+                            title = "Done for now",
+                            count = doneForNowTasks.size,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                doneForNowExpandedByDate[selectedDate] = !doneForNowExpanded
+                            },
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
         LazyColumn(
             modifier = Modifier
@@ -353,13 +432,43 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             if (tasks.isEmpty()) {
                 item { Text("No tasks for this date", style = MaterialTheme.typography.bodyLarge) }
             } else {
-                items(tasks, key = { it.id }) { task ->
+                items(regularTasks, key = { "regular-${it.id}" }) { task ->
                     TaskCard(
                         task = task,
                         onComplete = viewModel::completeTask,
                         onOpen = { selectedTask = task },
+                        onLongPress = { actionTask = task },
+                        descriptionFontSize = taskFontSize,
                         now = now,
                     )
+                }
+                if (carriedOverTasks.isNotEmpty()) {
+                    if (carriedOverExpanded) {
+                        items(carriedOverTasks, key = { "carried-${it.id}" }) { task ->
+                            TaskCard(
+                                task = task,
+                                onComplete = viewModel::completeTask,
+                                onOpen = { selectedTask = task },
+                                onLongPress = { actionTask = task },
+                                descriptionFontSize = taskFontSize,
+                                now = now,
+                            )
+                        }
+                    }
+                }
+                if (doneForNowTasks.isNotEmpty()) {
+                    if (doneForNowExpanded) {
+                        items(doneForNowTasks, key = { "done-for-now-${it.id}" }) { task ->
+                            TaskCard(
+                                task = task,
+                                onComplete = viewModel::completeTask,
+                                onOpen = { selectedTask = task },
+                                onLongPress = { actionTask = task },
+                                descriptionFontSize = taskFontSize,
+                                now = now,
+                            )
+                        }
+                    }
                 }
             }
             if (showCompleted && completedTasks.isNotEmpty()) {
@@ -370,7 +479,7 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                         modifier = Modifier.padding(top = 12.dp),
                     )
                 }
-                items(completedTasks, key = { it.id }) { task ->
+                items(completedTasks, key = { "completed-${it.id}" }) { task ->
                     TaskCard(
                         task = task,
                         onComplete = null,
@@ -380,6 +489,8 @@ private fun TodayScreen(viewModel: TaskViewModel) {
                             recentlyDeletedTask = task
                         },
                         onOpen = {},
+                        onLongPress = {},
+                        descriptionFontSize = taskFontSize,
                         now = now,
                     )
                 }
@@ -402,6 +513,18 @@ private fun TodayScreen(viewModel: TaskViewModel) {
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
     ) {
         Text(if (showCompleted) "Hide completed" else "Show completed")
+    }
+    IconButton(
+        onClick = { showAccentDialog = true },
+        modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(16.dp),
+    ) {
+        Icon(
+            Icons.Default.Settings,
+            contentDescription = "App accent colour settings",
+            tint = MaterialTheme.colorScheme.primary,
+        )
     }
     }
 
@@ -440,11 +563,125 @@ private fun TodayScreen(viewModel: TaskViewModel) {
         EditTaskDialog(
             task = task,
             onDismiss = { selectedTask = null },
-            onSave = { description, date, time ->
-                viewModel.updateTask(task, description, date.coerceAtLeast(today), time)
+            onComplete = { steps ->
+                viewModel.completeTask(task.id, steps)
+                selectedTask = null
+            },
+            onSave = { description, date, time, reminder, steps ->
+                viewModel.updateTask(
+                    task,
+                    description,
+                    date.coerceAtLeast(today),
+                    time,
+                    reminder,
+                    steps,
+                )
                 selectedTask = null
             },
         )
+    }
+    actionTask?.let { task ->
+        TaskActionDialog(
+            task = task,
+            onDismiss = { actionTask = null },
+            onReschedule = {
+                pendingActionTask = task
+                showRescheduleDialog = true
+            },
+            onBreakdown = {
+                pendingActionTask = task
+                showBreakdownDialog = true
+            },
+            onRoutine = {
+                pendingActionTask = task
+                showRoutineDialog = true
+            },
+            onReminder = {
+                pendingActionTask = task
+                showReminderDialog = true
+            },
+            onStatus = { status ->
+                viewModel.setStatus(task.id, status)
+                actionTask = null
+            },
+            onFocus = {
+                viewModel.setFocus(task.id, !task.isFocus)
+                actionTask = null
+            },
+            onDelete = {
+                viewModel.deleteTask(task.id)
+                recentlyDeletedTask = task
+                actionTask = null
+            },
+        )
+    }
+    if (showRescheduleDialog) {
+        pendingActionTask?.let { task ->
+            RescheduleDialog(
+                task = task,
+                onDismiss = {
+                    showRescheduleDialog = false
+                    pendingActionTask = null
+                },
+                onReschedule = { date ->
+                    viewModel.rescheduleTask(task, date)
+                    showRescheduleDialog = false
+                    pendingActionTask = null
+                    actionTask = null
+                },
+            )
+        }
+    }
+    if (showBreakdownDialog) {
+        pendingActionTask?.let { task ->
+            BreakdownDialog(
+                task = task,
+                onDismiss = {
+                    showBreakdownDialog = false
+                    pendingActionTask = null
+                },
+                onSave = { steps ->
+                    viewModel.setSteps(task.id, steps)
+                    showBreakdownDialog = false
+                    pendingActionTask = null
+                    actionTask = null
+                },
+            )
+        }
+    }
+    if (showRoutineDialog) {
+        pendingActionTask?.let { task ->
+            RoutineDialog(
+                task = task,
+                onDismiss = {
+                    showRoutineDialog = false
+                    pendingActionTask = null
+                },
+                onSave = { recurrence ->
+                    viewModel.setRoutine(task.id, recurrence)
+                    showRoutineDialog = false
+                    pendingActionTask = null
+                    actionTask = null
+                },
+            )
+        }
+    }
+    if (showReminderDialog) {
+        pendingActionTask?.let { task ->
+            ReminderDialog(
+                task = task,
+                onDismiss = {
+                    showReminderDialog = false
+                    pendingActionTask = null
+                },
+                onSave = { minutes ->
+                    viewModel.setReminder(task.id, minutes)
+                    showReminderDialog = false
+                    pendingActionTask = null
+                    actionTask = null
+                },
+            )
+        }
     }
     if (showVoiceDialog) {
         VoiceTaskDialog(
@@ -456,15 +693,68 @@ private fun TodayScreen(viewModel: TaskViewModel) {
             },
         )
     }
+    if (showAccentDialog) {
+        AccentColourDialog(
+            currentColour = accentColour,
+            customColours = customAccentColours,
+            currentFontSize = taskFontSize,
+            onDismiss = { showAccentDialog = false },
+            onSelect = {
+                viewModel.setAccentColour(it)
+                showAccentDialog = false
+            },
+            onSavePreset = viewModel::saveCustomAccentColour,
+            onFontSizeChange = viewModel::setTaskFontSize,
+        )
+    }
 }
 
 @Composable
+private fun TaskGroupHeader(
+    title: String,
+    count: Int,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clickable(onClick = onClick)
+            .padding(vertical = 1.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.align(Alignment.TopEnd),
+            )
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun TaskCard(
     task: TaskEntity,
     onComplete: ((Long) -> Unit)?,
     onReopen: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onOpen: () -> Unit,
+    onLongPress: () -> Unit,
+    descriptionFontSize: Float,
     now: LocalDateTime,
 ) {
     val colour = Color(android.graphics.Color.parseColor(task.colour))
@@ -479,6 +769,7 @@ private fun TaskCard(
         label = "task swipe",
     )
     val swipeProgress = (abs(animatedOffset) / 1200f).coerceIn(0f, 1f)
+    val swipeThreshold = 180f
     LaunchedEffect(swipeTarget) {
         if (swipeTarget != null && (onComplete != null || onDelete != null)) {
             delay(swipeDuration.toLong())
@@ -491,7 +782,10 @@ private fun TaskCard(
             .fillMaxWidth()
             .animateContentSize()
             .offset { IntOffset(animatedOffset.roundToInt(), 0) }
-            .clickable(onClick = { onReopen?.invoke() ?: onOpen() })
+            .combinedClickable(
+                onClick = { onReopen?.invoke() ?: onOpen() },
+                onLongClick = onLongPress,
+            )
             .pointerInput(task.id, onComplete, onDelete) {
                 if (onComplete != null || onDelete != null) {
                     detectHorizontalDragGestures(
@@ -500,7 +794,7 @@ private fun TaskCard(
                             dragOffset = (dragOffset + amount).coerceIn(-240f, 240f)
                         },
                         onDragEnd = {
-                            if (abs(dragOffset) > 120f) {
+                            if (abs(dragOffset) > swipeThreshold) {
                                 swipeTarget = if (dragOffset > 0) 1200f else -1200f
                             } else {
                                 dragOffset = 0f
@@ -553,12 +847,30 @@ private fun TaskCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(task.description, style = MaterialTheme.typography.titleMedium)
-                task.time?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                Text(task.description, fontSize = descriptionFontSize.sp)
+                task.time?.let {
+                    Text(it, fontSize = (descriptionFontSize * 0.8f).sp)
+                }
                 if (task.wasCarriedOver) {
                     Text(
                         "Carried over",
-                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = (descriptionFontSize * 0.7f).sp,
+                    )
+                }
+                if (task.status == "IN_PROGRESS") {
+                    Text("Started", fontSize = (descriptionFontSize * 0.7f).sp)
+                } else if (task.status == "DONE_FOR_NOW") {
+                    Text("Done for now", fontSize = (descriptionFontSize * 0.7f).sp)
+                }
+                if (task.isFocus) {
+                    Text("Focus", fontSize = (descriptionFontSize * 0.7f).sp)
+                }
+                if (task.steps.isNotBlank()) {
+                    val steps = task.steps.lines().filter(String::isNotBlank)
+                    val completedSteps = steps.count { it.startsWith("[x] ") }
+                    Text(
+                        "$completedSteps of ${steps.size} steps",
+                        fontSize = (descriptionFontSize * 0.7f).sp,
                     )
                 }
                 if (task.isCompleted) {
@@ -569,7 +881,7 @@ private fun TaskCard(
                                 it.format(DateTimeFormatter.ofPattern("HH:mm", Locale.UK))
                             }"
                         } ?: "Completed",
-                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = (descriptionFontSize * 0.75f).sp,
                     )
                 }
             }
@@ -600,7 +912,7 @@ private fun AddTaskDialog(
         taskColour = taskColour,
         isAdding = true,
         onDismiss = onDismiss,
-        onSave = { description, date, time ->
+        onSave = { description, date, time, _, _ ->
             onSave(description, date, time, taskColour)
         },
     )
@@ -610,16 +922,20 @@ private fun AddTaskDialog(
 private fun EditTaskDialog(
     task: TaskEntity,
     onDismiss: () -> Unit,
-    onSave: (String, LocalDate, LocalTime?) -> Unit,
+    onComplete: (String) -> Unit,
+    onSave: (String, LocalDate, LocalTime?, Int?, String) -> Unit,
 ) {
     TaskPanelDialog(
         initialDescription = task.description,
         initialDate = LocalDate.parse(task.date),
         initialTime = task.time?.let(LocalTime::parse),
+        initialReminderMinutes = task.reminderMinutes,
+        initialSteps = task.steps,
         taskColour = task.colour,
         isAdding = false,
         onDismiss = onDismiss,
         onSave = onSave,
+        onComplete = onComplete,
     )
 }
 
@@ -628,14 +944,20 @@ private fun TaskPanelDialog(
     initialDescription: String,
     initialDate: LocalDate,
     initialTime: LocalTime?,
+    initialReminderMinutes: Int? = null,
+    initialSteps: String = "",
     taskColour: String,
     isAdding: Boolean,
     onDismiss: () -> Unit,
-    onSave: (String, LocalDate, LocalTime?) -> Unit,
+    onSave: (String, LocalDate, LocalTime?, Int?, String) -> Unit,
+    onComplete: ((String) -> Unit)? = null,
 ) {
     var description by remember { mutableStateOf(initialDescription) }
     var date by remember { mutableStateOf(initialDate) }
     var time by remember { mutableStateOf(initialTime) }
+    var reminderMinutes by remember { mutableStateOf(initialReminderMinutes) }
+    var steps by remember { mutableStateOf(initialSteps) }
+    var showCompletePrompt by remember { mutableStateOf(false) }
     var showDateEditor by remember { mutableStateOf(false) }
     var showTimeEditor by remember { mutableStateOf(false) }
     var showDateFeedback by remember { mutableStateOf(false) }
@@ -660,7 +982,7 @@ private fun TaskPanelDialog(
         )
     val closeAndSave = {
         if (description.isNotBlank()) {
-            onSave(description, date, time)
+            onSave(description, date, time, reminderMinutes, steps)
         } else {
             onDismiss()
         }
@@ -685,9 +1007,16 @@ private fun TaskPanelDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 380.dp)
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
+                        .heightIn(
+                            min = 380.dp,
+                            max = if (isAdding) 480.dp else 620.dp,
+                        )
+                        .padding(12.dp)
+                        .clickable {
+                            focusRequester.requestFocus()
+                            showEditHint = true
+                        },
+                    verticalArrangement = Arrangement.Top,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                 Box(
@@ -718,6 +1047,48 @@ private fun TaskPanelDialog(
                         )
                     }
                 }
+                if (!isAdding && steps.isNotBlank()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                    ) {
+                        Text(
+                            "Steps",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        steps.lines()
+                            .filter(String::isNotBlank)
+                            .forEachIndexed { index, step ->
+                                val completed = step.startsWith("[x] ")
+                                val label = step.removePrefix("[x] ").removePrefix("[ ] ")
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Checkbox(
+                                        checked = completed,
+                                        onCheckedChange = { checked ->
+                                            val updated = steps.lines()
+                                                .filter(String::isNotBlank)
+                                                .toMutableList()
+                                            updated[index] = if (checked) {
+                                                "[x] $label"
+                                            } else {
+                                                "[ ] $label"
+                                            }
+                                            steps = updated.joinToString("\n")
+                                            if (checked && updated.all { it.startsWith("[x] ") }) {
+                                                showCompletePrompt = true
+                                            }
+                                        },
+                                    )
+                                    Text(label, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 Row(
                     modifier = Modifier
                         .wrapContentWidth()
@@ -786,8 +1157,7 @@ private fun TaskPanelDialog(
                             modifier = Modifier.size(24.dp),
                         )
                     }
-                }
-                }
+                    }
                 if (isAdding) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -795,7 +1165,9 @@ private fun TaskPanelDialog(
                     ) {
                         IconButton(
                             onClick = {
-                                if (description.isNotBlank()) onSave(description, date, time)
+                                if (description.isNotBlank()) {
+                                    onSave(description, date, time, reminderMinutes, steps)
+                                }
                             },
                         ) {
                             Icon(Icons.Default.Check, contentDescription = "Save task")
@@ -845,22 +1217,461 @@ private fun TaskPanelDialog(
     }
 
     if (showTimeEditor) {
-        LaunchedEffect(Unit) {
-            val selected = time ?: LocalTime.now().withSecond(0).withNano(0)
-            TimePickerDialog(
-                context,
-                { _, hour, minute ->
-                    time = LocalTime.of(hour, minute)
-                    showTimeEditor = false
-                },
-                selected.hour,
-                selected.minute,
-                true,
-            ).apply {
-                setOnDismissListener { showTimeEditor = false }
-            }.show()
+        TimeEditorDialog(
+            initialTime = time,
+            initialReminderMinutes = reminderMinutes,
+            onDismiss = { showTimeEditor = false },
+            onSave = { selectedTime, reminder ->
+                time = selectedTime
+                reminderMinutes = reminder
+                showTimeEditor = false
+            },
+            onRemoveTime = {
+                time = null
+                reminderMinutes = null
+                showTimeEditor = false
+            },
+        )
+    }
+    if (showCompletePrompt) {
+        AlertDialog(
+            onDismissRequest = { showCompletePrompt = false },
+            title = { Text("Task complete?") },
+            text = { Text("All steps are ticked. Would you like to complete this task?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCompletePrompt = false
+                        onComplete?.invoke(steps)
+                    },
+                ) {
+                    Text("Complete task")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCompletePrompt = false }) {
+                    Text("Not yet")
+                }
+            },
+        )
+    }
+}
+}
+
+@Composable
+private fun TimeEditorDialog(
+    initialTime: LocalTime?,
+    initialReminderMinutes: Int?,
+    onDismiss: () -> Unit,
+    onSave: (LocalTime, Int?) -> Unit,
+    onRemoveTime: () -> Unit,
+) {
+    val context = LocalContext.current
+    val selected = initialTime ?: LocalTime.now().withSecond(0).withNano(0)
+    var hour by remember { mutableStateOf(selected.hour) }
+    var minute by remember { mutableStateOf(selected.minute) }
+    var reminderMinutes by remember { mutableStateOf(initialReminderMinutes) }
+    var showReminderOptions by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("Target time", style = MaterialTheme.typography.titleLarge)
+                if (showReminderOptions) {
+                    Text(
+                        "Reminder",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    listOf(
+                        null to "At target time",
+                        5 to "5 minutes before",
+                        10 to "10 minutes before",
+                        15 to "15 minutes before",
+                        30 to "30 minutes before",
+                        60 to "1 hour before",
+                    ).forEach { (minutes, label) ->
+                        TextButton(
+                            onClick = {
+                                reminderMinutes = minutes
+                                showReminderOptions = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(label)
+                        }
+                    }
+                    TextButton(
+                        onClick = { showReminderOptions = false },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Back to target time")
+                    }
+                } else {
+                    AndroidView(
+                        factory = {
+                            android.widget.TimePicker(context).apply {
+                                setIs24HourView(true)
+                                hour = this@apply.hour
+                                minute = this@apply.minute
+                                setOnTimeChangedListener { _, newHour, newMinute ->
+                                    hour = newHour
+                                    minute = newMinute
+                                }
+                            }
+                        },
+                        update = { picker ->
+                            picker.hour = hour
+                            picker.minute = minute
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    TextButton(
+                        onClick = { showReminderOptions = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            reminderMinutes?.let { "Reminder: $it minutes before" }
+                                ?: "Reminder: at target time",
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        TextButton(onClick = onRemoveTime) {
+                            Text("Remove target time")
+                        }
+                        TextButton(
+                            onClick = {
+                                onSave(LocalTime.of(hour, minute), reminderMinutes)
+                            },
+                        ) {
+                            Text("Save")
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun TaskActionDialog(
+    task: TaskEntity,
+    onDismiss: () -> Unit,
+    onReschedule: () -> Unit,
+    onBreakdown: () -> Unit,
+    onRoutine: () -> Unit,
+    onReminder: () -> Unit,
+    onStatus: (String) -> Unit,
+    onFocus: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var showStatusOptions by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(task.description, modifier = Modifier.weight(1f))
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete task",
+                        tint = Color(0xFFB3261E),
+                    )
+                }
+            }
+        },
+        text = {
+            Column {
+                ActionMenuRow(Icons.Default.CalendarToday, "Reschedule", onReschedule)
+                ActionMenuRow(Icons.AutoMirrored.Filled.List, "Break down task", onBreakdown)
+                ActionMenuRow(
+                    Icons.Default.Repeat,
+                    if (task.recurrence == null) "Make routine" else "Change routine",
+                    onRoutine,
+                )
+                if (task.time != null) {
+                    ActionMenuRow(Icons.Default.Notifications, "Set reminder", onReminder)
+                }
+                ActionMenuRow(
+                    if (showStatusOptions) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    "Status",
+                    onClick = { showStatusOptions = !showStatusOptions },
+                )
+                if (showStatusOptions) {
+                    ActionMenuRow(
+                        Icons.Default.PlayArrow,
+                        "Started",
+                        onClick = { onStatus("IN_PROGRESS") },
+                        indent = true,
+                    )
+                    ActionMenuRow(
+                        Icons.Default.CheckCircle,
+                        "Done for now",
+                        onClick = { onStatus("DONE_FOR_NOW") },
+                        indent = true,
+                    )
+                    ActionMenuRow(
+                        Icons.Default.Close,
+                        "Clear status",
+                        onClick = { onStatus("NOT_STARTED") },
+                        indent = true,
+                    )
+                }
+                ActionMenuRow(
+                    Icons.Default.Star,
+                    if (task.isFocus) "Remove focus" else "Set as focus",
+                    onFocus,
+                )
+            }
+        },
+        confirmButton = {},
+    )
+}
+
+@Composable
+private fun ActionMenuRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    indent: Boolean = false,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(
+                start = if (indent) 48.dp else 0.dp,
+                top = 7.dp,
+                bottom = 7.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(label, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+private fun RescheduleDialog(
+    task: TaskEntity,
+    onDismiss: () -> Unit,
+    onReschedule: (LocalDate) -> Unit,
+) {
+    val today = LocalDate.now()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reschedule task") },
+        text = {
+            Column {
+                listOf(
+                    today to "Today",
+                    today.plusDays(1) to "Tomorrow",
+                    today.plusDays(2) to "In two days",
+                    today.plusDays(((6 - today.dayOfWeek.value + 7) % 7).toLong())
+                        to "This weekend",
+                    today.plusDays(7) to "Next week",
+                ).forEach { (date, label) ->
+                    TextButton(
+                        onClick = { onReschedule(date) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(label) }
+                }
+                Text(
+                    "Current date: ${task.date}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun BreakdownDialog(
+    task: TaskEntity,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    var stepsText by remember {
+        mutableStateOf(
+            task.steps.lines()
+                .filter(String::isNotBlank)
+                .joinToString("\n") { it.removePrefix("[x] ").removePrefix("[ ] ") },
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Break down task") },
+        text = {
+            OutlinedTextField(
+                value = stepsText,
+                onValueChange = { stepsText = it },
+                label = { Text("One step per line") },
+                minLines = 4,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val remainingExisting = task.steps.lines()
+                        .filter(String::isNotBlank)
+                        .toMutableList()
+                    val steps = stepsText.lines()
+                        .map(String::trim)
+                        .filter(String::isNotBlank)
+                        .joinToString("\n") { label ->
+                            val existingIndex = remainingExisting.indexOfFirst {
+                                it.removePrefix("[x] ").removePrefix("[ ] ") == label
+                            }
+                            if (existingIndex >= 0) {
+                                val existing = remainingExisting.removeAt(existingIndex)
+                                if (existing.startsWith("[x] ")) "[x] $label" else "[ ] $label"
+                            } else {
+                                "[ ] $label"
+                            }
+                        }
+                    onSave(steps)
+                },
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun RoutineDialog(
+    task: TaskEntity,
+    onDismiss: () -> Unit,
+    onSave: (String?) -> Unit,
+) {
+    var selectedDays by remember {
+        mutableStateOf(
+            task.recurrence?.removePrefix("DAYS:")?.split(',')
+                ?.mapNotNull(String::toIntOrNull)?.toSet() ?: emptySet(),
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Routine") },
+        text = {
+            Column {
+                TextButton(onClick = { onSave("DAILY") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Every day")
+                }
+                TextButton(onClick = { onSave("WEEKDAYS") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Weekdays")
+                }
+                TextButton(onClick = { onSave("WEEKENDS") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Weekends")
+                }
+                TextButton(onClick = { onSave("WEEKLY") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Every week")
+                }
+                Text("Choose days", style = MaterialTheme.typography.titleSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { index, label ->
+                        TextButton(
+                            onClick = {
+                                val day = index + 1
+                                selectedDays = if (day in selectedDays) {
+                                    selectedDays - day
+                                } else {
+                                    selectedDays + day
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                        ) {
+                            Text(
+                                label,
+                                color = if (index + 1 in selectedDays) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        }
+                    }
+                }
+                if (task.recurrence != null) {
+                    TextButton(onClick = { onSave(null) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Turn off routine")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (selectedDays.isNotEmpty()) {
+                        onSave("DAYS:${selectedDays.sorted().joinToString(",")}")
+                    } else {
+                        onDismiss()
+                    }
+                },
+            ) { Text("Save selected days") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun ReminderDialog(
+    task: TaskEntity,
+    onDismiss: () -> Unit,
+    onSave: (Int?) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reminder") },
+        text = {
+            Column {
+                listOf(
+                    null to "At deadline",
+                    5 to "5 minutes before",
+                    10 to "10 minutes before",
+                    15 to "15 minutes before",
+                    30 to "30 minutes before",
+                    60 to "1 hour before",
+                ).forEach { (minutes, label) ->
+                    TextButton(
+                        onClick = { onSave(minutes) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(label) }
+                }
+                if (task.reminderMinutes != null) {
+                    TextButton(onClick = { onSave(null) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Remove extra reminder")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 private fun darken(colour: Color): Color =
@@ -1058,7 +1869,156 @@ private fun VoiceTaskDialog(
     }
 }
 
+private val accentColourPresets = listOf(
+    "#6D5E8C",
+    "#3F638F",
+    "#2F7D6D",
+    "#8A5A44",
+    "#A24B63",
+    "#5E6B3F",
+)
+
 @Composable
-private fun AutaskticTheme(content: @Composable () -> Unit) {
-    MaterialTheme(content = content)
+private fun AccentColourDialog(
+    currentColour: String,
+    customColours: List<String>,
+    currentFontSize: Float,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+    onSavePreset: (String) -> Unit,
+    onFontSizeChange: (Float) -> Unit,
+) {
+    var selectedColour by remember { mutableStateOf(currentColour) }
+    var savedColours by remember { mutableStateOf(customColours) }
+    val initialHsv = remember(currentColour) {
+        FloatArray(3).also {
+            android.graphics.Color.colorToHSV(
+                android.graphics.Color.parseColor(currentColour),
+                it,
+            )
+        }
+    }
+    var hue by remember { mutableStateOf(initialHsv[0]) }
+    var saturation by remember { mutableStateOf(initialHsv[1]) }
+    var brightness by remember { mutableStateOf(initialHsv[2]) }
+    fun updateColour() {
+        selectedColour = String.format(
+            Locale.US,
+            "#%06X",
+            android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, brightness))
+                and 0xFFFFFF,
+        )
+    }
+    fun selectPreset(colour: String) {
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(android.graphics.Color.parseColor(colour), hsv)
+        hue = hsv[0]
+        saturation = hsv[1]
+        brightness = hsv[2]
+        selectedColour = colour
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Accent colour") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Choose a preset or create your own colour.")
+                (accentColourPresets + savedColours).distinct().chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        row.forEach { preset ->
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .background(
+                                        Color(android.graphics.Color.parseColor(preset)),
+                                        RoundedCornerShape(21.dp),
+                                    )
+                                    .clickable { selectPreset(preset) },
+                            )
+                        }
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .background(
+                            Color(android.graphics.Color.parseColor(selectedColour)),
+                            RoundedCornerShape(12.dp),
+                        ),
+                )
+                Text("Hue")
+                Slider(
+                    value = hue,
+                    onValueChange = {
+                        hue = it
+                        updateColour()
+                    },
+                    valueRange = 0f..360f,
+                )
+                Text("Saturation")
+                Slider(
+                    value = saturation,
+                    onValueChange = {
+                        saturation = it
+                        updateColour()
+                    },
+                    valueRange = 0f..1f,
+                )
+                Text("Brightness")
+                Slider(
+                    value = brightness,
+                    onValueChange = {
+                        brightness = it
+                        updateColour()
+                    },
+                    valueRange = 0f..1f,
+                )
+                Text("Task text size: ${currentFontSize.toInt()}sp")
+                Slider(
+                    value = currentFontSize,
+                    onValueChange = onFontSizeChange,
+                    valueRange = 12f..28f,
+                    steps = 7,
+                )
+                TextButton(
+                    onClick = {
+                        if (selectedColour !in savedColours) {
+                            savedColours = savedColours + selectedColour
+                            onSavePreset(selectedColour)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Save colour as preset")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSelect(selectedColour) }) { Text("Use colour") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun AutaskticTheme(
+    accentColour: String,
+    content: @Composable () -> Unit,
+) {
+    val primary = try {
+        Color(android.graphics.Color.parseColor(accentColour))
+    } catch (_: IllegalArgumentException) {
+        Color(0xFF6D5E8C)
+    }
+    MaterialTheme(
+        colorScheme = lightColorScheme(
+            primary = primary,
+            secondary = primary,
+            tertiary = primary,
+        ),
+        content = content,
+    )
 }

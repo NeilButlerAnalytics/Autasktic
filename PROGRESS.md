@@ -108,6 +108,12 @@ example phrases remains.
 - [x] Add voice-parser regression tests
 - [x] Add build and USB deployment documentation
 - [x] Add exact-alarm scheduling and permission flow
+- [x] Add long-press task actions
+- [x] Add quick rescheduling presets
+- [x] Add optional pre-deadline reminders
+- [x] Add optional task breakdown steps
+- [x] Add simple recurring routines
+- [x] Add manual focus and lightweight task statuses
 - [x] Add colour-matched auto-saving task panel
 - [x] Add icon-based date/time controls and bounded date adjustment
 - [x] Match Popup1 and compact bottom Box2 styling to the visual reference
@@ -129,6 +135,7 @@ CMF Phone 1 and the notification arrived at the scheduled time.
 
 ## Excluded from the MVP
 
-Recurring tasks, AI interpretation, categories, priorities, reminders, calendar
-integrations, cloud synchronisation, multiple users, task sharing, and productivity
-statistics.
+AI interpretation, categories, automatic priorities, calendar integrations, cloud
+synchronisation, multiple users, task sharing, and productivity statistics remain
+excluded from the MVP. Recurring routines, reminders, and lightweight status
+actions are now supported through the task action menu.

@@ -7,7 +7,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [TaskEntity::class], version = 2, exportSchema = false)
+@Database(entities = [TaskEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
 
@@ -21,7 +21,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "autasktic.db",
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build().also { instance = it }
             }
 
@@ -29,6 +29,27 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     "ALTER TABLE tasks ADD COLUMN wasCarriedOver INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+
+        }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE tasks ADD COLUMN status TEXT NOT NULL DEFAULT 'NOT_STARTED'",
+                )
+                database.execSQL(
+                    "ALTER TABLE tasks ADD COLUMN isFocus INTEGER NOT NULL DEFAULT 0",
+                )
+                database.execSQL(
+                    "ALTER TABLE tasks ADD COLUMN reminderMinutes INTEGER",
+                )
+                database.execSQL(
+                    "ALTER TABLE tasks ADD COLUMN recurrence TEXT",
+                )
+                database.execSQL(
+                    "ALTER TABLE tasks ADD COLUMN steps TEXT NOT NULL DEFAULT ''",
                 )
             }
         }
